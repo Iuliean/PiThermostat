@@ -133,9 +133,6 @@
     <AndroidResource Include="Resources\Menu\mainMenu.xml" />
   </ItemGroup>
   <ItemGroup>
-    <AndroidResource Include="Resources\drawable\ic_shutdown.png" />
-  </ItemGroup>
-  <ItemGroup>
     <AndroidResource Include="Resources\layout\activity_settings.xml">
       <SubType>Designer</SubType>
     </AndroidResource>
