@@ -4,8 +4,7 @@
   
     <item android:id="@+id/menuButtonShutdown"
 		  android:title="Shutodwn"
-		  android:showAsAction="always"
-		  android:icon="@drawable/ic_shutdown"/>
+		  android:showAsAction="always"/>
 		
 	<item android:id="@+id/menuButtonSettings"
 		  android:title="Settings"/>
