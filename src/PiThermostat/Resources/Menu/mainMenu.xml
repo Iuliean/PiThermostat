@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--For all properties see: https://aka.ms/android-menu-resource-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+  
+    <item android:id="@+id/menuButtonShutdown"
+		  android:title="Shutodwn"
+		  android:showAsAction="always"
+		  android:icon="@drawable/ic_shutdown"/>
+		
+	<item android:id="@+id/menuButtonSettings"
+		  android:title="Settings"/>
+	
+	<item android:id="@+id/menuButtonStatistics"
+		  android:title="Statistics"/>
+  
+</menu>
+
