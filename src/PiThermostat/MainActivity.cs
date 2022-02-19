@@ -11,6 +11,7 @@ using Xamarin.Essentials;
 using System.Threading.Tasks;
 using Android.Graphics;
 using System.Net.Http;
+using System.Globalization;
 
 namespace PiThermostat
 {
@@ -132,9 +133,9 @@ namespace PiThermostat
             float min;
             float max;
 
-            if (!float.TryParse(inputMinTemp.Text, out min))
+            if (!float.TryParse(inputMinTemp.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out min))
                 min = float.MinValue;
-            if (!float.TryParse(inputMaxTemp.Text, out max))
+            if (!float.TryParse(inputMaxTemp.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out max))
                 max = float.MinValue;
 
             var setParamsTask = server.SetParams(new Parameters(min, max));
