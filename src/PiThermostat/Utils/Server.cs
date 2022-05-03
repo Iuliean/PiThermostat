@@ -340,29 +340,29 @@ namespace PiThermostat.Utils
             }
         }
 
-        public Task<TemperaturePoint[]> GetTemperatures(string startDate, string endDate = "")
+        public Task<TemperaturePoint[]> GetTemperatures(string startDate, string endDate)
         {
-            return GetJson<TemperaturePoint>("/temperature/get", startDate == "" ? "" : "/" + startDate, endDate == "" ? "" : "/" + endDate);
+            return GetJson<TemperaturePoint>("/temperature/get", "startDate=" + startDate + (endDate == "" ? "" : "&endDate=" + endDate));
         }
 
         public async Task<float> GetTempAverage(string startDate, string endDate = "")
         {
-            return (await GetJson<TempAverage>("/temperature/getAverage", startDate == "" ? "" : "/" + startDate, endDate == "" ? "" : "/" + endDate))[0].averageTemp;
+            return (await GetJson<TempAverage>("/temperature/getAverage", startDate + (endDate == "" ? "" : "&endDate=" + endDate)))[0].averageTemp;
         }
 
         public Task<StatePoint[]> GetStates(string state, string startDate, string endDate = "")
         {
-            return GetJson<StatePoint>("/state/get/" + state, startDate == "" ? "" : "/" + startDate, endDate == "" ? "" : "/" + endDate);
+            return GetJson<StatePoint>("/state/get", "state=" + state + "&startDate=" + startDate + (endDate == "" ? "" : "&endDate=" + endDate));
         }
 
-        public async Task<float>GetStateAverage(string startDate, string endDate = "")
+        public async Task<float>GetStateAverage(string state, string startDate, string endDate = "")
         {
-            return (await GetJson<StateAverage>("/state/getAverageOnTime", startDate == "" ? "" : "/" + startDate, endDate == "" ? "" : "/" + endDate))[0].averageOnTime;
+            return (await GetJson<StateAverage>("/state/getAverage", "state=" + state + "&startDate=" + startDate + (endDate == "" ? "" : "&endDate=" + endDate)))[0].averageOnTime;
         }
 
-        private async Task<T[]> GetJson<T>(string urlExtension, string startDate, string endDate = "") where T : struct
+        private async Task<T[]> GetJson<T>(string urlExtension, string parameters ) where T : struct
         {
-            HttpResponseMessage response = await RequestWithTimeout(1000, urlExtension + startDate + endDate, "GET", null);
+            HttpResponseMessage response = await RequestWithTimeout(1000, urlExtension + "?" + parameters, "GET", null);
 
             if (response == null)
                 return null;
@@ -377,7 +377,7 @@ namespace PiThermostat.Utils
                     {
                         if (await Auth())
                         {
-                            response = await RequestWithTimeout(1000, urlExtension + startDate + endDate, "GET", null);
+                            response = await RequestWithTimeout(1000, urlExtension + "?" + parameters, "GET", null);
 
                             if (response == null)
                                 return null;

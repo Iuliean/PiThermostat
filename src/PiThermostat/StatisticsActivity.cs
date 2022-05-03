@@ -156,7 +156,7 @@ namespace PiThermostat
 
             Task.Run(async () =>
             {
-                float average = await s.GetStateAverage(startDate, endDate);
+                float average = await s.GetStateAverage("on", startDate, endDate);
 
                 RunOnUiThread(() =>
                 {
