@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Android.Graphics;
 using System.Net.Http;
 using System.Globalization;
+using System.Net;
 
 namespace PiThermostat
 {
@@ -23,6 +24,9 @@ namespace PiThermostat
         private EditText inputMinTemp;
         private EditText inputMaxTemp;
         private Button   buttonSubmit;
+
+        private readonly object _update = new object();
+        private bool            update;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -36,15 +40,16 @@ namespace PiThermostat
             inputMinTemp    = (EditText)FindViewById(Resource.Id.inputMinTemp);
             inputMaxTemp    = (EditText)FindViewById(Resource.Id.inputMaxTemp);
             buttonSubmit    = (Button)FindViewById(Resource.Id.buttonSubmit);
+            update          = true;
 
             server.Url = Preferences.Get("url", "http://localhost");
             server.Password = Preferences.Get("password", "");
 
-            server.SetAuthCallBack((int code) =>
+            server.SetAuthCallBack((HttpStatusCode code) =>
             {
                 switch(code)
                 {
-                    case 401:
+                    case HttpStatusCode.Unauthorized:
                         {
                             RunOnUiThread(() =>
                             {
@@ -52,7 +57,7 @@ namespace PiThermostat
                             });
                             return;
                         }
-                    case 404:
+                    case HttpStatusCode.NotFound:
                         {
                             RunOnUiThread(() =>
                             {
@@ -60,7 +65,7 @@ namespace PiThermostat
                             });
                             return;
                         }
-                    case 408:
+                    case HttpStatusCode.RequestTimeout:
                         {
                             RunOnUiThread(() =>
                             {
@@ -72,7 +77,7 @@ namespace PiThermostat
                         {
                             RunOnUiThread(() =>
                             {
-                                Toast.MakeText(this, code + " unknown error code", ToastLength.Short).Show();
+                                Toast.MakeText(this, (int)code + " unhandled error code", ToastLength.Short).Show();
                             });
                             return;
                         }
@@ -84,10 +89,33 @@ namespace PiThermostat
             var updateTask = Task.Run(UpdateLoop);
         }
 
+        protected override void OnPause()
+        {
+            base.OnPause();
+            lock(_update)
+            {
+                update = false;
+            }
+        }
+
+        protected override void OnResume()
+        {
+            base.OnResume();
+            lock(_update)
+            {
+                update = true;
+            }
+            UpdateLoop();
+        }
         private async Task UpdateLoop()
         {
             while(true)
             {
+                lock(_update)
+                {
+                    if (!update)
+                        return;
+                }
                 try
                 {
                     ThermostatState? state = await server.GetParams();

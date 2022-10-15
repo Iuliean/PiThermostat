@@ -115,11 +115,12 @@ namespace PiThermostat
 
             Task.Run(async () =>
             {
-                float average = await s.GetTempAverage(startDate, endDate);
+                float? average = await s.GetTempAverage(startDate, endDate);
 
                 RunOnUiThread(() =>
                 {
-                    textAverageTemp.Text = "Average temperature: " + ((float)((int)(average*100))/100).ToString();
+                    if(average != null)
+                        textAverageTemp.Text = "Average temperature: " + ((float)((int)(average*100))/100).ToString();
                 });
             });
 
@@ -156,11 +157,12 @@ namespace PiThermostat
 
             Task.Run(async () =>
             {
-                float average = await s.GetStateAverage("on", startDate, endDate);
+                float? average = await s.GetStateAverage("on", startDate, endDate);
 
                 RunOnUiThread(() =>
                 {
-                    textAverageStateDuration.Text = "Average duration: " + ((int)(average / 3600)).ToString() + "h " + ((int)((average / 60) % 60)).ToString() +"m";
+                    if(average != null)
+                        textAverageStateDuration.Text = "Average duration: " + ((int)(average / 3600)).ToString() + "h " + ((int)((average / 60) % 60)).ToString() +"m";
                 });
             });
 

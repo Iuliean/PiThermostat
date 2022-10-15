@@ -15,10 +15,20 @@ using System.Security.Cryptography;
 using System.Net;
 using Newtonsoft.Json;
 using System.Threading;
-
+using Newtonsoft.Json.Linq;
+using Org.Apache.Http.Protocol;
+using Android.Net.Http;
+using Android.Hardware.Biometrics;
+using Org.Json;
 
 namespace PiThermostat.Utils
 {
+    public struct JsonResponse<T>
+    {
+        public int status;
+        public T data;
+
+    }
     public struct ThermostatState
     {
         public float temp;
@@ -62,11 +72,6 @@ namespace PiThermostat.Utils
         }
     }
 
-    public struct TempAverage
-    {
-        public float averageTemp;
-    }
-
     public struct TemperaturePoint
     {
         public float value;
@@ -87,19 +92,13 @@ namespace PiThermostat.Utils
         public string date;
     }
 
-    public struct StateAverage
-    {
-        public float averageOnTime;
-    }
-
     sealed class Server
     {
         private string url;
         private string password;
 
-        private Action<int> authCallback;
+        private Action<HttpStatusCode> authCallback;
 
-        private CookieContainer cookies;
         private readonly HttpClient client;
 
         private static readonly object l = new object();
@@ -111,11 +110,8 @@ namespace PiThermostat.Utils
             password = "";
             SetAuthCallBack(null);
 
-            cookies = new CookieContainer ();
-            HttpClientHandler handler = new HttpClientHandler ();
-            handler.CookieContainer = cookies;
-
-            client = new HttpClient (handler);
+            client = new HttpClient ();
+            client.Timeout = TimeSpan.FromSeconds(1);
         }
 
         public static Server Instance
@@ -131,7 +127,7 @@ namespace PiThermostat.Utils
             }
         }
 
-        public void SetAuthCallBack(Action<int> action)
+        public void SetAuthCallBack(Action<HttpStatusCode> action)
         {
             authCallback = action;
         }
@@ -163,91 +159,90 @@ namespace PiThermostat.Utils
             }
         }
 
-        private void Error(int code)
+        private void Error(HttpStatusCode code)
         {
             if (authCallback != null)
                 authCallback(code);
         }
-
-        private async Task<HttpResponseMessage> RequestWithTimeout(int time, string endpoint, string reqMethod, HttpContent content)
+        private async Task<JsonResponse<T>?> GetRequest<T>(string endpoint, string? parameters = null)
         {
-            Task<HttpResponseMessage> responseTask = null;
-
-            if ( reqMethod == "POST")
-                responseTask = client.PostAsync(url + endpoint, content);
-            else if (reqMethod == "GET")
-                responseTask = client.GetAsync(url + endpoint);
-
-            var timeout = Task.Delay(time);
-
-            await Task.WhenAny(timeout, responseTask);
-
-            if (timeout.IsCompleted)
+            try
             {
-                Error(408);
+                HttpResponseMessage response = await client.GetAsync(url + endpoint + "?" + parameters);
+
+                if(response.StatusCode == HttpStatusCode.OK)
+                    return JsonConvert.DeserializeObject<JsonResponse<T>>(await response.Content.ReadAsStringAsync());
+                
+                if(response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    await Auth();
+                    response = await client.GetAsync(url + endpoint + "?" + parameters);
+                    if (response.StatusCode == HttpStatusCode.OK)
+                        return JsonConvert.DeserializeObject<JsonResponse<T>>(await response.Content.ReadAsStringAsync());
+                    else
+                    {
+                        Error(HttpStatusCode.Unauthorized);
+                        return null;
+                    }
+                }
+                Error(response.StatusCode);
+                return null;
+            }
+            catch(TimeoutException)
+            {
+                Error(HttpStatusCode.RequestTimeout);
+                return null;
+            }
+            catch(Exception)
+            { 
                 return null;
             }
 
-            return responseTask.Result;
         }
         private async Task<bool> Auth()
         {
             MultipartFormDataContent form = new MultipartFormDataContent();
             form.Add(new StringContent(Password), "password");
 
-            HttpResponseMessage response = await RequestWithTimeout(1000, "/auth", "POST", form);
-
-            if (((int)response.StatusCode) == 200)
+            try
             {
-                cookies.Add(new Uri(url), new Cookie("authToken", cookies.GetCookies(new Uri(url + "/auth"))[0].Value));
-                return true;
+                HttpResponseMessage response = await client.PostAsync(url + "/auth", form);
+
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    var token = JObject.Parse(await response.Content.ReadAsStringAsync()).GetValue("token").Value<string>();
+                    if(client.DefaultRequestHeaders.Contains("Authorization"))
+                    {
+                        client.DefaultRequestHeaders.Remove("Authorization");
+                        client.DefaultRequestHeaders.Add("Authorization", token);
+                        return true;
+                    }
+                    else
+                    {
+                        client.DefaultRequestHeaders.Add("Authorization", token);
+                        return true;
+                    }
+
+                    return true;
+                }
+                else
+                    return false;
             }
-            
-            else
+            catch(TimeoutException)
+            {
+                Error(HttpStatusCode.OK);
                 return false;
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e.StackTrace);
+                return false;
+            }
         }
 
         public async Task<ThermostatState?> GetParams()
         {
-            HttpResponseMessage response = await RequestWithTimeout(1000, "/getParams", "GET", null);
-
-            if (response == null)
-                return null;
-
-            switch ((int)response.StatusCode)
-            {
-                case 200:
-                    {
-                        return JsonConvert.DeserializeObject<ThermostatState>(await response.Content.ReadAsStringAsync());
-                    }
-                case 401:
-                    {
-                        if (await Auth())
-                        {
-                            response = await RequestWithTimeout(1000, "/getParams", "GET", null);
-
-                            if (response == null)
-                                return null;
-
-                            if (response.IsSuccessStatusCode)
-                                return JsonConvert.DeserializeObject<ThermostatState>(await response.Content.ReadAsStringAsync());
-                            else
-                                Error((int)response.StatusCode);
-
-                            return null;
-                        }
-                        else
-                        {
-                            Error(401);
-                            return null;
-                        }
-                    }
-                default:
-                    {
-                        Error((int)response.StatusCode);
-                        return null;
-                    }
-            }
+            return (await GetRequest<ThermostatState>("/getParams"))?.data;
         }
 
         public async Task SetParams(Parameters parameters)
@@ -256,152 +251,84 @@ namespace PiThermostat.Utils
 
             HttpContent content = new StringContent(json);
             content.Headers.ContentType = new MediaTypeHeaderValue("Application/json");
+            
+            HttpResponseMessage response = await client.PostAsync( url + "/setParams", content);
+ 
 
-            HttpResponseMessage response = await RequestWithTimeout(1000, "/setParams", "POST", content);
-
-            if (response == null)
-                return;
-
-            switch((int)response.StatusCode)
+            switch(response.StatusCode)
             {
-                case 200:
+                case HttpStatusCode.OK:
                     {
                         return;
                     }
-                case 401:
+                case HttpStatusCode.Unauthorized:
                     {
                         if (await Auth())
                         {
-                            response = await RequestWithTimeout(1000, "/setParams", "POST", content);
+                            response = await client.PostAsync("/setParams", content);
 
-                            if (response == null)
-                                return;
-
-                            if (response.IsSuccessStatusCode)
+                            if (response.StatusCode == HttpStatusCode.OK)
                                 return;
                             else
-                                Error((int)response.StatusCode);
+                                Error(response.StatusCode);
 
                             return;
                         }
                         else
                         {
-                            Error(401);
+                            Error(HttpStatusCode.Unauthorized);
                             return;
                         }
                     }
                     default:
                     {
-                        Error((int)response.StatusCode);
+                        Error(response.StatusCode);
                         return;
                     }
             }
+
         }
-        public async Task ShutdownRequest()
+        public Task ShutdownRequest()
         {
-            HttpResponseMessage response = await RequestWithTimeout(1000, "/shutdown", "GET", null);
+            return GetRequest<bool>("/shutdown");
+        }
 
-            if (response == null)
-                return;
+        public async Task<TemperaturePoint[]> GetTemperatures(string? startDate = null, string? endDate = null)
+        {
+            var result = await GetRequest<TemperaturePoint[]>("/temperature/get", String.Format("startDate={0}&endDate={1}", startDate, endDate));
+            return result is null ? new TemperaturePoint[] { } : result?.data; 
+        }
 
-            switch((int)response.StatusCode)
+        public async Task<float> GetTempAverage(string? startDate = null, string? endDate = null)
+        {
+            var result = await GetRequest<JObject>("/temperature/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
+            if(result != null)
             {
-                case 200:
-                    {
-                        return;
-                    }
-                case 401:
-                    {
-                        if(await Auth())
-                        {
-                            response = await RequestWithTimeout(1000, "/shutdown", "GET", null);
-
-                            if (response == null)
-                                return;
-
-                            if ((int)response.StatusCode == 200)
-                                return;
-                            else
-                                Error((int)response.StatusCode);
-
-                            return;
-                        }
-                        else
-                        {
-                            Error(401);
-                            return;
-                        }
-                    }
-                default:
-                    {
-                        Error((int)response.StatusCode);
-                        return;
-                    }
+                return (float)result?.data.GetValue("averageTemp");
             }
-        }
-
-        public Task<TemperaturePoint[]> GetTemperatures(string startDate, string endDate)
-        {
-            return GetJson<TemperaturePoint>("/temperature/get", "startDate=" + startDate + (endDate == "" ? "" : "&endDate=" + endDate));
-        }
-
-        public async Task<float> GetTempAverage(string startDate, string endDate = "")
-        {
-            return (await GetJson<TempAverage>("/temperature/getAverage", startDate + (endDate == "" ? "" : "&endDate=" + endDate)))[0].averageTemp;
-        }
-
-        public Task<StatePoint[]> GetStates(string state, string startDate, string endDate = "")
-        {
-            return GetJson<StatePoint>("/state/get", "state=" + state + "&startDate=" + startDate + (endDate == "" ? "" : "&endDate=" + endDate));
-        }
-
-        public async Task<float>GetStateAverage(string state, string startDate, string endDate = "")
-        {
-            return (await GetJson<StateAverage>("/state/getAverage", "state=" + state + "&startDate=" + startDate + (endDate == "" ? "" : "&endDate=" + endDate)))[0].averageOnTime;
-        }
-
-        private async Task<T[]> GetJson<T>(string urlExtension, string parameters ) where T : struct
-        {
-            HttpResponseMessage response = await RequestWithTimeout(1000, urlExtension + "?" + parameters, "GET", null);
-
-            if (response == null)
-                return null;
-
-            switch((int)response.StatusCode)
+            else
             {
-                case 200:
-                    {
-                        return JsonConvert.DeserializeObject<T[]>(await response.Content.ReadAsStringAsync());
-                    }
-                case 401:
-                    {
-                        if (await Auth())
-                        {
-                            response = await RequestWithTimeout(1000, urlExtension + "?" + parameters, "GET", null);
-
-                            if (response == null)
-                                return null;
-
-                            if ((int)response.StatusCode == 200)
-                                return JsonConvert.DeserializeObject<T[]>(await response.Content.ReadAsStringAsync());
-                            else
-                                Error((int)response.StatusCode);
-
-                            return null;
-                        }
-                        else
-                        {
-                            Error(401);
-                            return null;
-                        }
-                    }
-                default:
-                    {
-                        Error((int)response.StatusCode);
-                        return null;
-                    }
+                return 0;
             }
         }
 
+        public async Task<StatePoint[]> GetStates(string? state = null, string? startDate = null, string? endDate = null)
+        {
+            var result = await GetRequest<StatePoint[]>("/state/get", String.Format("startDate={0}&endDate{1}&state={2}", startDate, endDate, state));
+            return result is null ? new StatePoint[] { } : result?.data;
+        }
+
+        public async Task<float?>GetStateAverage(string state, string startDate, string endDate = "")
+        {
+            var result = await GetRequest<JObject>("/state/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
+            if (result != null)
+            {
+                return (float)result?.data.GetValue("averageState");
+            }
+            else
+            {
+                return 0;
+            }
+        }
     }
 }
