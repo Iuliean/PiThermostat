@@ -118,15 +118,15 @@ namespace PiThermostat
                 }
                 try
                 {
-                    ThermostatState? state = await server.GetParams();
+                    ThermostatState state = await server.GetParams();
                     
                     if (state != null)
                     {
-                        textTemperature.Text = state.Value.temp.ToString();
-                        inputMinTemp.Hint = state.Value.minTemp.ToString();
-                        inputMaxTemp.Hint = state.Value.maxTemp.ToString();
+                        textTemperature.Text = state.temp.ToString();
+                        inputMinTemp.Hint = state.minTemp.ToString();
+                        inputMaxTemp.Hint = state.maxTemp.ToString();
 
-                        if (state.Value.state == "ON")
+                        if (state.state == "ON")
                             textTemperature.SetTextColor(Color.Green);
                         else
                             textTemperature.SetTextColor(Color.Red);

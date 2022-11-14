@@ -11,22 +11,22 @@ using System.Text;
 
 namespace PiThermostat.Utils
 {
-    public struct JsonResponse<T>
+    public class JsonResponse<T>
     {
         public int status;
         public T data;
 
     }
-    public struct AverageTemp
+    public class AverageTemp
     {
         public float averageTemp;
     }
 
-    public struct AverageState
+    public class AverageState
     {
         public float averageOnTime;
     }
-    public struct ThermostatState
+    public class ThermostatState
     {
         public float temp;
         public float minTemp;
@@ -42,7 +42,7 @@ namespace PiThermostat.Utils
         }
     }
 
-    public struct Parameters
+    public class Parameters
     {
         public float? minTemp;
         public float? maxTemp;
@@ -69,7 +69,7 @@ namespace PiThermostat.Utils
         }
     }
 
-    public struct TemperaturePoint
+    public class TemperaturePoint
     {
         public float value;
         public string time;
@@ -81,7 +81,7 @@ namespace PiThermostat.Utils
         }
     }
 
-    public struct StatePoint
+    public class StatePoint
     {
         public float duration;
         public bool state;

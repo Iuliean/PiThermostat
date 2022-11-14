@@ -95,7 +95,7 @@ namespace PiThermostat.Utils
             if (authCallback != null)
                 authCallback(code);
         }
-        private async Task<JsonResponse<T>?> GetRequest<T>(string endpoint, string? parameters = null)
+        private async Task<JsonResponse<T>> GetRequest<T>(string endpoint, string? parameters = null)
         {
             try
             {
@@ -170,7 +170,7 @@ namespace PiThermostat.Utils
             }
         }
 
-        public async Task<ThermostatState?> GetParams()
+        public async Task<ThermostatState> GetParams()
         {
             return (await GetRequest<ThermostatState>("/getParams"))?.data;
         }
@@ -234,7 +234,7 @@ namespace PiThermostat.Utils
             var result = await GetRequest<AverageTemp[]>("/temperature/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
             if(result != null)
             {
-                return (float)result?.data[0].averageTemp;
+                return result.data[0].averageTemp;
             }
             else
             {
@@ -248,12 +248,12 @@ namespace PiThermostat.Utils
             return result is null ? new StatePoint[] { } : result?.data;
         }
 
-        public async Task<float?>GetStateAverage(string state, string startDate, string endDate = "")
+        public async Task<float>GetStateAverage(string state, string startDate, string endDate = "")
         {
             var result = await GetRequest<AverageState[]>("/state/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
             if (result != null)
             {
-                return (float)result?.data[0].averageOnTime;
+                return result.data[0].averageOnTime;
             }
             else
             {
