@@ -23,75 +23,6 @@ using Org.Json;
 
 namespace PiThermostat.Utils
 {
-    public struct JsonResponse<T>
-    {
-        public int status;
-        public T data;
-
-    }
-    public struct ThermostatState
-    {
-        public float temp;
-        public float minTemp;
-        public float maxTemp;
-        public string state;
-
-        public ThermostatState(float _temperature, float _minTemp, float _maxTemp, string _state)
-        {
-            temp    = _temperature;
-            minTemp = _minTemp;
-            maxTemp = _maxTemp;
-            state   = _state;
-        }
-    }
-
-    public struct Parameters
-    {
-        public float? minTemp;
-        public float? maxTemp;
-
-        public Parameters(float _minTemp, float _maxTemp)
-        {
-            if(_minTemp != float.MinValue)
-            {
-                minTemp = _minTemp;
-            }
-            else
-            {
-                minTemp = null;
-            }
-            
-            if(_maxTemp != float.MinValue)
-            {
-                maxTemp = _maxTemp;
-            }
-            else
-            {
-                maxTemp = null;
-            }
-        }
-    }
-
-    public struct TemperaturePoint
-    {
-        public float value;
-        public string time;
-        public string date;
-
-        public override string ToString()
-        {
-            return "Value: " + value + "\nTime: " + time + "\nDate: " + date + "\n";
-        }
-    }
-
-    public struct StatePoint
-    {
-        public float duration;
-        public bool state;
-        public string time;
-        public string date;
-    }
-
     sealed class Server
     {
         private string url;
@@ -169,8 +100,7 @@ namespace PiThermostat.Utils
             try
             {
                 HttpResponseMessage response = await client.GetAsync(url + endpoint + "?" + parameters);
-
-                if(response.StatusCode == HttpStatusCode.OK)
+                if (response.StatusCode == HttpStatusCode.OK)
                     return JsonConvert.DeserializeObject<JsonResponse<T>>(await response.Content.ReadAsStringAsync());
                 
                 if(response.StatusCode == HttpStatusCode.Unauthorized)
@@ -301,10 +231,10 @@ namespace PiThermostat.Utils
 
         public async Task<float> GetTempAverage(string? startDate = null, string? endDate = null)
         {
-            var result = await GetRequest<JObject>("/temperature/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
+            var result = await GetRequest<AverageTemp[]>("/temperature/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
             if(result != null)
             {
-                return (float)result?.data.GetValue("averageTemp");
+                return (float)result?.data[0].averageTemp;
             }
             else
             {
@@ -320,10 +250,10 @@ namespace PiThermostat.Utils
 
         public async Task<float?>GetStateAverage(string state, string startDate, string endDate = "")
         {
-            var result = await GetRequest<JObject>("/state/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
+            var result = await GetRequest<AverageState[]>("/state/getAverage", String.Format("startDate={0}&endDate={1}", startDate, endDate));
             if (result != null)
             {
-                return (float)result?.data.GetValue("averageState");
+                return (float)result?.data[0].averageOnTime;
             }
             else
             {
